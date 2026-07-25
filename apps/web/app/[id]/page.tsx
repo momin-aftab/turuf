@@ -8,7 +8,7 @@ import { AblyProvider } from '@/components/AblyProvider';
 import { GameSubscriber } from '@/components/GameSubscriber';
 import { GameBoard } from '@/components/GameBoard';
 import { Hand } from '@/components/Hand';
-import { ChatPanel } from '@/components/ChatPanel';
+
 import { TrumpSelector } from '@/components/TrumpSelector';
 
 interface LobbyPageProps {
@@ -21,14 +21,38 @@ export default function LobbyPage({ params }: LobbyPageProps) {
   const lobbyId = resolvedParams.id.toUpperCase();
   const router = useRouter();
 
-  const { jwt, lobbyStatus, players, mySeat, error, setSession, setLobbyState, setError, isAdmin } = useGameStore();
+  const { 
+    lobbyId: storeLobbyId, 
+    jwt, 
+    lobbyStatus, 
+    players, 
+    mySeat, 
+    error, 
+    setSession, 
+    setLobbyState, 
+    setError, 
+    isAdmin,
+    clearSession 
+  } = useGameStore();
 
   const [isLoading, setIsLoading] = useState(true);
   const [joinName, setJoinName] = useState('');
   const [isJoining, setIsJoining] = useState(false);
 
-  // Initial fetch of lobby status (without JWT)
+  // 1. Synchronously clear stale session on mount
+  const isStale = storeLobbyId && storeLobbyId !== lobbyId;
+  const isJoined = jwt && !isStale;
+  
   useEffect(() => {
+    if (isStale) {
+      clearSession();
+    }
+  }, [isStale, clearSession]);
+
+  // 2. Continual polling for lobby status (works as fallback for websockets)
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+
     async function fetchStatus() {
       try {
         const data = await apiClient.lobby.status(lobbyId);
@@ -42,13 +66,16 @@ export default function LobbyPage({ params }: LobbyPageProps) {
       }
     }
     
-    // Only fetch if we aren't already in the lobby
-    if (!jwt) {
-      fetchStatus();
-    } else {
-      setIsLoading(false);
-    }
-  }, [lobbyId, jwt, router, setLobbyState]);
+    // Always fetch immediately
+    fetchStatus();
+    
+    // Always poll every 3 seconds, even if joined, to ensure consistency
+    interval = setInterval(fetchStatus, 3000);
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [lobbyId, router, setLobbyState]);
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,7 +85,8 @@ export default function LobbyPage({ params }: LobbyPageProps) {
     setError(null);
     try {
       const data = await apiClient.lobby.join(lobbyId, joinName.trim());
-      setSession(data.lobbyId, data.token, data.playerId, data.seat);
+      setSession(lobbyId, data.jwt, data.playerId, data.seat);
+      setIsJoining(false);
       // AblyProvider will detect the JWT and connect automatically
     } catch (err: any) {
       setError(err.message || 'Failed to join lobby');
@@ -74,6 +102,16 @@ export default function LobbyPage({ params }: LobbyPageProps) {
     }
   };
 
+  const handleLeaveLobby = async () => {
+    try {
+      await apiClient.lobby.leave(lobbyId);
+      useGameStore.getState().clearSession();
+      // Polling will automatically resume because jwt is now null
+    } catch (err: any) {
+      setError(err.message || 'Failed to leave lobby');
+    }
+  };
+
   if (isLoading) {
     return (
       <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center' }}>
@@ -82,8 +120,9 @@ export default function LobbyPage({ params }: LobbyPageProps) {
     );
   }
 
+
   // ─── WAITING ROOM UI (NOT JOINED) ───
-  if (!jwt) {
+  if (!isJoined) {
     return (
       <main style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
         <div className="glass-panel animate-fade-in" style={{ maxWidth: '400px', width: '100%', padding: '2rem', textAlign: 'center' }}>
@@ -94,7 +133,7 @@ export default function LobbyPage({ params }: LobbyPageProps) {
             {players.length === 0 && <div style={{ color: 'var(--color-text-secondary)' }}>Waiting for players...</div>}
             {players.map((p, i) => (
               <div key={p.id} style={{ padding: '0.5rem', background: 'rgba(0,0,0,0.2)', borderRadius: '4px' }}>
-                {i + 1}. {p.name}
+                {i + 1}. {p.name} {i === 0 && '👑'}
               </div>
             ))}
           </div>
@@ -155,7 +194,7 @@ export default function LobbyPage({ params }: LobbyPageProps) {
                 <div style={{ width: '100%', maxWidth: '400px', marginBottom: '2rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                   {players.map((p, i) => (
                     <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem', background: 'rgba(0,0,0,0.2)', borderRadius: '4px' }}>
-                      <span>{i + 1}. {p.name} {mySeat === p.seat && '(You)'}</span>
+                      <span>{i + 1}. {p.name} {i === 0 && '👑'} {mySeat === p.seat && '(You)'}</span>
                       {isAdmin && mySeat === 0 && (
                         <button 
                           className="btn btn-secondary" 
@@ -182,14 +221,22 @@ export default function LobbyPage({ params }: LobbyPageProps) {
                     className="btn btn-primary" 
                     onClick={handleStartGame}
                     disabled={players.length < 4}
-                    style={{ width: '100%', maxWidth: '400px' }}
+                    style={{ width: '100%', maxWidth: '400px', marginBottom: '1rem' }}
                   >
                     Start Game
                   </button>
                 )}
                 {mySeat !== 0 && (
-                  <p style={{ color: 'var(--color-text-secondary)' }}>Waiting for the host (Player 1) to start the game.</p>
+                  <p style={{ color: 'var(--color-text-secondary)', marginBottom: '1rem' }}>Waiting for the host (Player 1) to start the game.</p>
                 )}
+
+                <button 
+                  className="btn btn-secondary" 
+                  onClick={handleLeaveLobby}
+                  style={{ width: '100%', maxWidth: '400px' }}
+                >
+                  Leave Lobby
+                </button>
               </div>
             ) : (
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
@@ -200,10 +247,7 @@ export default function LobbyPage({ params }: LobbyPageProps) {
             )}
           </div>
 
-          {/* Sidebar Area (Chat) */}
-          <div style={{ width: '300px', display: 'flex', flexDirection: 'column' }}>
-            <ChatPanel />
-          </div>
+
           
         </div>
       </main>

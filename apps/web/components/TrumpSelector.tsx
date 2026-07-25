@@ -31,17 +31,16 @@ export function TrumpSelector() {
 
   return (
     <div style={{
-      position: 'fixed',
-      top: 0, left: 0, width: '100vw', height: '100vh',
-      backgroundColor: 'rgba(0, 0, 0, 0.7)',
-      backdropFilter: 'blur(8px)',
+      position: 'absolute',
+      top: '40%', left: '50%',
+      transform: 'translate(-50%, -50%)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      zIndex: 100
+      zIndex: 200
     }}>
-      <div className="glass-panel animate-fade-in" style={{ padding: '2rem', textAlign: 'center', maxWidth: '400px', width: '90%' }}>
-        <h2 style={{ color: 'var(--color-carpet-gold)', marginBottom: '0.5rem' }}>Select Trump Suit</h2>
+      <div className="glass-panel animate-fade-in" style={{ padding: '1rem', textAlign: 'center', width: '350px', background: 'rgba(28, 50, 84, 0.95)', border: '2px solid var(--color-carpet-gold)', boxShadow: '0 0 30px rgba(0,0,0,0.8)' }}>
+        <h2 style={{ color: 'var(--color-carpet-gold)', marginBottom: '0.5rem', fontSize: '1.5rem' }}>Select Trump Suit</h2>
         <p style={{ marginBottom: '2rem' }}>You have been dealt your first 5 cards. Choose wisely.</p>
         
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>

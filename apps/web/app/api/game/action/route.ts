@@ -83,7 +83,8 @@ export async function POST(req: NextRequest) {
   if (!gameState) return Errors.notFound('Game');
 
   // ── Replay prevention ─────────────────────────────────────────────────────
-  if (clientSeq !== gameState.actionSequence + 1) {
+  // The client sends the actionSequence of the state they are currently viewing.
+  if (clientSeq !== gameState.actionSequence) {
     return Errors.conflict(
       'Action sequence mismatch. The game state may have changed — please refresh.'
     );

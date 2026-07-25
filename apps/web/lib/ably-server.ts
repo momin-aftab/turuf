@@ -81,13 +81,13 @@ export interface AblyTokenResult {
 export async function createAblyToken(
   lobbyId: string,
   playerId: string
-): Promise<Ably.TokenRequest> {
+): Promise<Ably.TokenDetails> {
   const capability: Record<string, string[]> = {
     [channels.lobby(lobbyId)]: ['subscribe', 'presence'],
     [channels.player(playerId)]: ['subscribe', 'history'],
   };
 
-  return getClient().auth.createTokenRequest({
+  return getClient().auth.requestToken({
     capability: JSON.stringify(capability),
     clientId: playerId,
     ttl: 24 * 60 * 60 * 1000, // 24h in milliseconds

@@ -1,16 +1,9 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type { Card, PlayerView, RoundResult, Seat, Team } from '@turuf/game-engine';
 import type { PublicPlayerInfo, ServerEvent, LobbyStatus } from '@/types';
 
 // ─── State Definition ─────────────────────────────────────────────────────────
-
-export interface ChatMessage {
-  id: string; // unique ID for React key (usually timestamp + seat)
-  seat: Seat;
-  name: string;
-  message: string;
-  timestamp: number;
-}
 
 export interface GameStoreState {
   // ── Session ──
@@ -27,7 +20,6 @@ export interface GameStoreState {
   // ── Game State ──
   view: PlayerView | null;
   myHand: Card[];
-  chatHistory: ChatMessage[];
   
   // ── Connection Status ──
   isConnected: boolean;
@@ -62,7 +54,6 @@ const initialState: GameStoreState = {
   players: [],
   view: null,
   myHand: [],
-  chatHistory: [],
   isConnected: false,
   isReconnecting: false,
   error: null,
@@ -70,8 +61,10 @@ const initialState: GameStoreState = {
 
 // ─── Store Implementation ─────────────────────────────────────────────────────
 
-export const useGameStore = create<GameStore>((set, get) => ({
-  ...initialState,
+export const useGameStore = create<GameStore>()(
+  persist(
+    (set, get) => ({
+      ...initialState,
 
   setSession: (lobbyId, jwt, myPlayerId, mySeat) => 
     set({ lobbyId, jwt, myPlayerId, mySeat, error: null }),
@@ -131,7 +124,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
           return { players: newPlayers };
         }
         
-        case 'PLAYER_LEFT':
+        case 'PLAYER_LEFT': {
+          const newPlayers = state.players.filter(p => p.seat !== event.payload.seat);
+          return { 
+            players: newPlayers,
+            lobbyStatus: newPlayers.length < 4 && state.lobbyStatus === 'ready' ? 'waiting' : state.lobbyStatus
+          }; 
+        }
+
         case 'PLAYER_RECONNECTED': {
           // For now, we don't handle online/offline presence in UI deeply, 
           // but we could update a status flag on the player.
@@ -142,13 +142,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
           return {
             lobbyStatus: 'in_game',
             view: event.payload.view,
-            chatHistory: [...state.chatHistory, {
-              id: `sys-${Date.now()}`,
-              seat: 0 as Seat, // system message
-              name: 'System',
-              message: 'Game started! Player 1 is selecting trump.',
-              timestamp: Date.now()
-            }]
           };
 
         case 'HAND_DEALT':
@@ -159,13 +152,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
           if (!state.view) return state;
           return {
             view: event.payload.view,
-            chatHistory: [...state.chatHistory, {
-              id: `sys-${Date.now()}`,
-              seat: 0 as Seat,
-              name: 'System',
-              message: `Trump selected: ${event.payload.trumpSuit}`,
-              timestamp: Date.now()
-            }]
           };
         }
 
@@ -229,13 +215,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
               scores,
               roundHistory: history
             },
-            chatHistory: [...state.chatHistory, {
-              id: `sys-${Date.now()}`,
-              seat: 0 as Seat,
-              name: 'System',
-              message: `Game over! Team ${winner} wins.`,
-              timestamp: Date.now()
-            }]
           };
         }
 
@@ -247,22 +226,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
           };
         }
         
-        case 'PLAYER_TIMEOUT': {
-          // Can push a system chat message
-          return state;
-        }
 
-        case 'CHAT_MESSAGE': {
-          const { seat, name, message, timestamp } = event.payload;
-          return {
-            chatHistory: [...state.chatHistory, {
-              id: `${timestamp}-${seat}`,
-              seat,
-              name,
-              message,
-              timestamp
-            }]
-          };
+        case 'PLAYER_TIMEOUT': {
+          return state;
         }
 
         default:
@@ -270,4 +236,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
     });
   }
-}));
+    }),
+    {
+      name: 'turuf-game-storage',
+      storage: createJSONStorage(() => sessionStorage),
+      // We only want to persist session and connection info, not the entire transient game state
+      partialize: (state) => ({
+        lobbyId: state.lobbyId,
+        jwt: state.jwt,
+        myPlayerId: state.myPlayerId,
+        mySeat: state.mySeat,
+      }),
+    }
+  )
+);

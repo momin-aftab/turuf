@@ -46,6 +46,11 @@ export function PlayerSeat({ name, seat, team, isMyTurn, isConnected, isMe, isDe
         <span style={{ fontWeight: 'bold', fontSize: '1rem', color: 'var(--color-text-primary)' }}>
           {name} {isMe && '(You)'}
         </span>
+        {isMyTurn && (
+          <span className="gold-text animate-pulse" style={{ fontSize: '0.75rem', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Your Turn
+          </span>
+        )}
       </div>
       
       <div className="player-seat-subtitle" style={{ display: 'flex', gap: '0.5rem', fontSize: '0.7rem', color: 'var(--color-text-secondary)', marginBottom: '0.5rem', whiteSpace: 'nowrap' }}>
