@@ -28,6 +28,7 @@ import { checkRateLimit, lobbyJoinLimiter, getClientIdentifier } from '@/lib/rat
 import { SEAT_TEAM } from '@turuf/game-engine';
 import type { Seat } from '@turuf/game-engine';
 import type { PlayerRecord } from '@/types';
+import { randomUUID } from 'crypto';
 
 export const runtime = 'nodejs'; // needs crypto.randomUUID
 
@@ -64,83 +65,88 @@ export async function POST(
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] ?? c
   );
 
-  // ── Load and validate lobby ───────────────────────────────────────────────
-  const { id } = await params;
-  const lobbyId = normalizeLobbyId(id);
+  try {
+    // ── Load and validate lobby ───────────────────────────────────────────────
+    const { id } = await params;
+    const lobbyId = normalizeLobbyId(id);
 
-  if (!isValidLobbyIdFormat(lobbyId)) {
-    return Errors.notFound('Lobby');
+    if (!isValidLobbyIdFormat(lobbyId)) {
+      return Errors.notFound('Lobby');
+    }
+
+    const lobby = await getLobby(lobbyId);
+    if (!lobby) {
+      return Errors.notFound('Lobby');
+    }
+
+    if (lobby.status === 'in_game' || lobby.status === 'post_game') {
+      return Errors.conflict('A game is already in progress in this lobby');
+    }
+
+    if (lobby.players.length >= 4) {
+      return Errors.conflict('This lobby is full (4/4 players)');
+    }
+
+    // ── Assign seat ───────────────────────────────────────────────────────────
+    const seat = lobby.players.length as Seat; // seats filled in join order
+    const playerId = randomUUID();
+    const team = SEAT_TEAM[seat];
+
+    const player: PlayerRecord = {
+      id: playerId,
+      name,
+      seat,
+      team,
+      status: 'connected',
+    };
+
+    // ── Persist ───────────────────────────────────────────────────────────────
+    const updatedLobby = {
+      ...lobby,
+      hostPlayerId: lobby.players.length === 0 ? playerId : lobby.hostPlayerId,
+      status: lobby.players.length === 3 ? ('ready' as const) : ('waiting' as const),
+      players: [...lobby.players, player],
+    };
+
+    await setLobby(updatedLobby);
+
+    // ── Issue JWT + Ably token ────────────────────────────────────────────────
+    const [jwt, ablyTokenRequest] = await Promise.all([
+      signPlayerToken({ lobbyId, playerId, seat }),
+      createAblyToken(lobbyId, playerId),
+    ]);
+
+    // ── Broadcast join event ──────────────────────────────────────────────────
+    await publishToLobby(lobbyId, {
+      type: 'PLAYER_JOINED',
+      payload: {
+        player: { id: playerId, name, seat, team },
+        playerCount: updatedLobby.players.length,
+      },
+    });
+
+    // ── Refresh Redis TTL ─────────────────────────────────────────────────────
+    await refreshLobbyTTL(lobbyId);
+
+    return successResponse({
+      jwt,
+      ablyTokenRequest,
+      seat,
+      playerId,
+      lobby: {
+        id: updatedLobby.id,
+        status: updatedLobby.status,
+        playerCount: updatedLobby.players.length,
+        players: updatedLobby.players.map((p) => ({
+          seat: p.seat,
+          name: p.name,
+          team: p.team,
+          status: p.status,
+        })),
+      },
+    });
+  } catch (err: any) {
+    console.error('JOIN ERROR:', err);
+    return new Response(JSON.stringify({ error: err.message || String(err), stack: err.stack }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
-
-  const lobby = await getLobby(lobbyId);
-  if (!lobby) {
-    return Errors.notFound('Lobby');
-  }
-
-  if (lobby.status === 'in_game' || lobby.status === 'post_game') {
-    return Errors.conflict('A game is already in progress in this lobby');
-  }
-
-  if (lobby.players.length >= 4) {
-    return Errors.conflict('This lobby is full (4/4 players)');
-  }
-
-  // ── Assign seat ───────────────────────────────────────────────────────────
-  const seat = lobby.players.length as Seat; // seats filled in join order
-  const playerId = crypto.randomUUID();
-  const team = SEAT_TEAM[seat];
-
-  const player: PlayerRecord = {
-    id: playerId,
-    name,
-    seat,
-    team,
-    status: 'connected',
-  };
-
-  // ── Persist ───────────────────────────────────────────────────────────────
-  const updatedLobby = {
-    ...lobby,
-    hostPlayerId: lobby.players.length === 0 ? playerId : lobby.hostPlayerId,
-    status: lobby.players.length === 3 ? ('ready' as const) : ('waiting' as const),
-    players: [...lobby.players, player],
-  };
-
-  await setLobby(updatedLobby);
-
-  // ── Issue JWT + Ably token ────────────────────────────────────────────────
-  const [jwt, ablyTokenRequest] = await Promise.all([
-    signPlayerToken({ lobbyId, playerId, seat }),
-    createAblyToken(lobbyId, playerId),
-  ]);
-
-  // ── Broadcast join event ──────────────────────────────────────────────────
-  await publishToLobby(lobbyId, {
-    type: 'PLAYER_JOINED',
-    payload: {
-      player: { id: playerId, name, seat, team },
-      playerCount: updatedLobby.players.length,
-    },
-  });
-
-  // ── Refresh Redis TTL ─────────────────────────────────────────────────────
-  await refreshLobbyTTL(lobbyId);
-
-  return successResponse({
-    jwt,
-    ablyTokenRequest,
-    seat,
-    playerId,
-    lobby: {
-      id: updatedLobby.id,
-      status: updatedLobby.status,
-      playerCount: updatedLobby.players.length,
-      players: updatedLobby.players.map((p) => ({
-        seat: p.seat,
-        name: p.name,
-        team: p.team,
-        status: p.status,
-      })),
-    },
-  });
 }
