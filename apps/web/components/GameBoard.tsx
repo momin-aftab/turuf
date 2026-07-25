@@ -17,7 +17,7 @@ export function GameBoard() {
     if (isRoundComplete) {
       const timer = setTimeout(() => {
         setShowHighlight(true);
-      }, 2500);
+      }, 500);
       return () => clearTimeout(timer);
     } else {
       setShowHighlight(false);

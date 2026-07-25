@@ -193,13 +193,32 @@ export const useGameStore = create<GameStore>()(
         case 'ROUND_START': {
           if (!state.view) return state;
           const { roundNumber, leader } = event.payload;
+          
+          // Delay clearing the table for 3 seconds to show round winner animation
+          setTimeout(() => {
+            useGameStore.setState((s) => {
+              if (!s.view) return s;
+              // Only clear if the round is actually complete (4 cards). 
+              // This prevents bugs if multiple rounds somehow start rapidly.
+              if (Object.keys(s.view.played).length === 4) {
+                return {
+                  view: {
+                    ...s.view,
+                    played: {},
+                    roundSuit: null
+                  }
+                };
+              }
+              return s;
+            });
+          }, 3000);
+
           return {
             view: {
               ...state.view,
               currentRound: roundNumber,
               currentTurn: leader,
-              played: {}, // clear the table
-              roundSuit: null
+              // DO NOT clear played or roundSuit yet
             }
           };
         }
