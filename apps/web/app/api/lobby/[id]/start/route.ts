@@ -28,6 +28,7 @@ import {
   dealInitial,
   createInitialGameState,
   validateGameStart,
+  transitionToTrumpSelection,
 } from '@turuf/game-engine';
 import type { Seat } from '@turuf/game-engine';
 
@@ -72,7 +73,10 @@ export async function POST(
   const { player1Hand, remainingDeck } = dealInitial(deck);
 
   // ── Create initial game state ─────────────────────────────────────────────
-  const gameState = createInitialGameState(lobbyId, player1Hand, remainingDeck);
+  let gameState = createInitialGameState(lobbyId, player1Hand, remainingDeck);
+  
+  // Immediately transition to trump selection (Player 1 has their 5 cards)
+  gameState = transitionToTrumpSelection(gameState);
 
   // ── Persist ───────────────────────────────────────────────────────────────
   await setGameState(gameState);

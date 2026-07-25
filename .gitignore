@@ -26,6 +26,7 @@ test-results/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.example
 
 # ─── Misc ────────────────────────────────────────────────────────────────────
 .DS_Store

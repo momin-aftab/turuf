@@ -46,5 +46,5 @@ export async function GET(req: NextRequest) {
   // ── Issue Ably token ──────────────────────────────────────────────────────
   const tokenRequest = await createAblyToken(token.lobbyId, token.playerId);
 
-  return successResponse({ tokenRequest });
+  return Response.json(tokenRequest);
 }

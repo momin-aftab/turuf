@@ -1,33 +1,42 @@
 'use client';
 
 import { useEffect, useCallback } from 'react';
-import { useChannel } from 'ably/react';
+import { useAbly } from 'ably/react';
 import { useGameStore } from '@/store/game';
 import type { ServerEvent } from '@/types';
 import * as Ably from 'ably';
 
 export function GameSubscriber() {
   const { lobbyId, myPlayerId, jwt, applyServerEvent, setError } = useGameStore();
+  const ablyClient = useAbly();
 
   // Handle messages uniformly
   const handleMessage = useCallback((message: Ably.Message) => {
-    // The message.data is the ServerEvent
-    const event = message.data as ServerEvent;
+    // Reconstruct ServerEvent from Ably Message
+    // server-side uses channel.publish(event.type, event.payload)
+    const event: ServerEvent = {
+      type: message.name as ServerEvent['type'],
+      payload: message.data,
+    } as ServerEvent;
+    
     console.log('Received ServerEvent:', event.type, event.payload);
     applyServerEvent(event);
   }, [applyServerEvent]);
 
-  // Subscribe to public lobby channel
-  const { channel: lobbyChannel } = useChannel(
-    `lobby:${lobbyId}`,
-    handleMessage
-  );
+  useEffect(() => {
+    if (!lobbyId || !myPlayerId) return;
 
-  // Subscribe to private player channel
-  const { channel: playerChannel } = useChannel(
-    `player:${myPlayerId}`,
-    handleMessage
-  );
+    const lobbyChannel = ablyClient.channels.get(`lobby:${lobbyId}`);
+    const playerChannel = ablyClient.channels.get(`player:${myPlayerId}`);
+
+    lobbyChannel.subscribe(handleMessage);
+    playerChannel.subscribe(handleMessage);
+
+    return () => {
+      lobbyChannel.unsubscribe(handleMessage);
+      playerChannel.unsubscribe(handleMessage);
+    };
+  }, [ablyClient, lobbyId, myPlayerId, handleMessage]);
 
   // Initial state fetch if we joined mid-game or refreshed
   useEffect(() => {

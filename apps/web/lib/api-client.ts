@@ -72,6 +72,9 @@ export const apiClient = {
         body: JSON.stringify({ name }),
       }),
       
+    leave: (lobbyId: string) => 
+      fetchApi<{ success: boolean }>(`/api/lobby/${lobbyId}/leave`, { method: 'POST' }),
+
     start: (lobbyId: string) => 
       fetchApi<{ status: string }>(`/api/lobby/${lobbyId}/start`, { method: 'POST' }),
 

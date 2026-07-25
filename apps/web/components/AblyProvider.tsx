@@ -61,9 +61,14 @@ export function AblyProvider({ children }: AblyProviderProps) {
     };
   }, [jwt, setConnectionStatus, setError]);
 
-  // If not connected (e.g. haven't joined a lobby), just render children normally
+  // If not connected, render a loading state because children like GameSubscriber require the RealtimeProvider context
   if (!client) {
-    return <>{children}</>;
+    return (
+      <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="spinner" />
+        <div style={{ marginLeft: '1rem', color: 'var(--color-carpet-gold)' }}>Connecting to real-time server...</div>
+      </div>
+    );
   }
 
   return (
