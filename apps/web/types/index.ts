@@ -27,8 +27,11 @@ export interface PlayerRecord {
   name: string; // display name (max 20 chars, HTML-escaped)
   seat: Seat;
   team: 'A' | 'B';
-  status: 'connected' | 'disconnected';
+  /** 'connected' = online, 'disconnected' = temporarily offline, 'inactive' = bot-controlled */
+  status: 'connected' | 'disconnected' | 'inactive';
   disconnectedAt?: number;
+  /** Unix ms timestamp of the last heartbeat from this player's client */
+  lastHeartbeatAt?: number;
 }
 
 // ─── JWT Payload ───────────────────────────────────────────────────────────────
@@ -56,6 +59,8 @@ export type ServerEvent =
   | { type: 'GAME_ENDED'; payload: { winner: Team; scores: Record<Team, number>; history: RoundResult[] } }
   | { type: 'RECONNECT_STATE'; payload: { view: PlayerView; myHand: Card[] } }
   | { type: 'PLAYER_TIMEOUT'; payload: { seat: Seat; name: string; cardPlayed: Card } }
+  | { type: 'BOT_SUBSTITUTED'; payload: { seat: Seat; name: string } }
+  | { type: 'PLAYER_RETURNED'; payload: { seat: Seat; name: string } }
   | { type: 'CHAT_MESSAGE'; payload: { seat: Seat; name: string; message: string; timestamp: number } };
 
 export interface PublicPlayerInfo {

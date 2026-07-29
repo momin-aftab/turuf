@@ -27,6 +27,7 @@ export default function LobbyPage({ params }: LobbyPageProps) {
     lobbyStatus, 
     players, 
     mySeat, 
+    myPlayerId,
     error, 
     setSession, 
     setLobbyState, 
@@ -38,6 +39,7 @@ export default function LobbyPage({ params }: LobbyPageProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [joinName, setJoinName] = useState('');
   const [isJoining, setIsJoining] = useState(false);
+  const [isRejoining, setIsRejoining] = useState(false);
 
   // 1. Synchronously clear stale session on mount
   const isStale = storeLobbyId && storeLobbyId !== lobbyId;
@@ -112,10 +114,60 @@ export default function LobbyPage({ params }: LobbyPageProps) {
     }
   };
 
-  if (isLoading) {
+  // ── Auto-rejoin flow ───────────────────────────────────────────────────────
+  // If the player has a stored playerId but no valid JWT and the game is in progress,
+  // attempt to rejoin automatically.
+  useEffect(() => {
+    if (isJoined || !myPlayerId || isRejoining) return;
+    if (lobbyStatus !== 'in_game') return;
+
+    async function attemptRejoin() {
+      setIsRejoining(true);
+      try {
+        const data = await apiClient.lobby.rejoin(lobbyId, myPlayerId!, joinName || 'Player');
+        setSession(lobbyId, data.jwt, data.playerId, data.seat);
+        if (data.view) {
+          useGameStore.getState().applyServerEvent({
+            type: 'RECONNECT_STATE',
+            payload: { view: data.view, myHand: data.myHand },
+          });
+        }
+      } catch (err: any) {
+        console.log('Auto-rejoin failed:', err.message);
+        // Don't set error — let the user join normally
+      } finally {
+        setIsRejoining(false);
+      }
+    }
+
+    attemptRejoin();
+  }, [lobbyStatus, myPlayerId, isJoined, isRejoining, lobbyId, setSession]);
+
+  const handleRejoin = async () => {
+    if (!myPlayerId || isRejoining) return;
+    setIsRejoining(true);
+    setError(null);
+    try {
+      const data = await apiClient.lobby.rejoin(lobbyId, myPlayerId, joinName || 'Player');
+      setSession(lobbyId, data.jwt, data.playerId, data.seat);
+      if (data.view) {
+        useGameStore.getState().applyServerEvent({
+          type: 'RECONNECT_STATE',
+          payload: { view: data.view, myHand: data.myHand },
+        });
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to rejoin');
+    } finally {
+      setIsRejoining(false);
+    }
+  };
+
+  if (isLoading || isRejoining) {
     return (
-      <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '1rem' }}>
         <div className="spinner" />
+        {isRejoining && <div style={{ color: 'var(--color-carpet-gold)' }}>Rejoining game...</div>}
       </div>
     );
   }
@@ -123,6 +175,9 @@ export default function LobbyPage({ params }: LobbyPageProps) {
 
   // ─── WAITING ROOM UI (NOT JOINED) ───
   if (!isJoined) {
+    // Show rejoin button if game is in progress and player has a stored ID
+    const canRejoin = myPlayerId && (lobbyStatus === 'in_game');
+
     return (
       <main style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
         <div className="glass-panel animate-fade-in" style={{ maxWidth: '400px', width: '100%', padding: '2rem', textAlign: 'center' }}>
@@ -144,7 +199,18 @@ export default function LobbyPage({ params }: LobbyPageProps) {
             </div>
           )}
 
-          {players.length < 4 || lobbyStatus === 'waiting' ? (
+          {canRejoin ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ color: 'var(--color-carpet-gold)', marginBottom: '0.5rem' }}>Game is in progress. You were previously in this game.</div>
+              <button 
+                className="btn btn-primary" 
+                onClick={handleRejoin}
+                disabled={isRejoining}
+              >
+                {isRejoining ? <div className="spinner" /> : 'Rejoin Game'}
+              </button>
+            </div>
+          ) : players.length < 4 || lobbyStatus === 'waiting' ? (
             <form onSubmit={handleJoin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <input 
                 type="text" 

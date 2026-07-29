@@ -4,13 +4,17 @@ import React, { useEffect, useState } from 'react';
 import * as Ably from 'ably';
 import { AblyProvider as RealtimeProvider } from 'ably/react';
 import { useGameStore } from '@/store/game';
+import { apiClient } from '@/lib/api-client';
 
 interface AblyProviderProps {
   children: React.ReactNode;
 }
 
+/** Heartbeat interval in milliseconds */
+const HEARTBEAT_INTERVAL_MS = 10_000;
+
 export function AblyProvider({ children }: AblyProviderProps) {
-  const { jwt, setConnectionStatus, setError } = useGameStore();
+  const { jwt, lobbyId, setConnectionStatus, setError } = useGameStore();
   const [client, setClient] = useState<Ably.Realtime | null>(null);
 
   useEffect(() => {
@@ -60,6 +64,23 @@ export function AblyProvider({ children }: AblyProviderProps) {
       setClient(null);
     };
   }, [jwt, setConnectionStatus, setError]);
+
+  // ── Heartbeat: signal to server that this player is still online ─────────
+  useEffect(() => {
+    if (!lobbyId || !jwt) return;
+
+    // Send an initial heartbeat immediately
+    apiClient.lobby.heartbeat(lobbyId).catch(() => {});
+
+    const interval = setInterval(() => {
+      apiClient.lobby.heartbeat(lobbyId).catch(() => {
+        // Silently ignore heartbeat failures — the timeout endpoint
+        // will detect staleness from the missing heartbeats
+      });
+    }, HEARTBEAT_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+  }, [lobbyId, jwt]);
 
   // If not connected, render a loading state because children like GameSubscriber require the RealtimeProvider context
   if (!client) {

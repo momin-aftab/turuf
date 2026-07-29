@@ -83,6 +83,15 @@ export const apiClient = {
         method: 'POST',
         body: JSON.stringify({ playerId, newName }),
       }),
+
+    heartbeat: (lobbyId: string) =>
+      fetchApi<{ ok: boolean }>(`/api/lobby/${lobbyId}/heartbeat`, { method: 'POST' }),
+
+    rejoin: (lobbyId: string, playerId: string, name: string) =>
+      fetchApi<any>(`/api/lobby/${lobbyId}/rejoin`, {
+        method: 'POST',
+        body: JSON.stringify({ playerId, name }),
+      }),
   },
   
   game: {
@@ -122,6 +131,13 @@ export const apiClient = {
         method: 'POST',
         body: JSON.stringify({ message }),
       });
+    },
+
+    timeout: async () => {
+      if (devEngine.active) {
+        return { alreadyHandled: true };
+      }
+      return fetchApi<any>('/api/game/timeout', { method: 'POST' });
     },
   }
 };

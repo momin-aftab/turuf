@@ -25,6 +25,12 @@ export interface GameStoreState {
   isConnected: boolean;
   isReconnecting: boolean;
   error: string | null;
+
+  // ── Timeout & Bot Status ──
+  /** Unix ms timestamp deadline for the current turn (null = no active timer) */
+  turnDeadline: number | null;
+  /** Seats that are currently bot-controlled (player disconnected/inactive) */
+  botSeats: Set<Seat>;
 }
 
 export interface GameStoreActions {
@@ -40,6 +46,9 @@ export interface GameStoreActions {
   
   // Local optimistic updates (optional, for immediate UI feedback before server confirms)
   optimisticPlayCard: (card: Card) => void;
+
+  // Turn timer
+  setTurnDeadline: (deadline: number | null) => void;
 }
 
 export type GameStore = GameStoreState & GameStoreActions;
@@ -57,6 +66,8 @@ const initialState: GameStoreState = {
   isConnected: false,
   isReconnecting: false,
   error: null,
+  turnDeadline: null,
+  botSeats: new Set(),
 };
 
 // ─── Store Implementation ─────────────────────────────────────────────────────
@@ -78,6 +89,8 @@ export const useGameStore = create<GameStore>()(
   setError: (error) => set({ error }),
   
   clearSession: () => set(initialState),
+
+  setTurnDeadline: (deadline) => set({ turnDeadline: deadline }),
 
   optimisticPlayCard: (card: Card) => {
     const { myHand, view, mySeat } = get();
@@ -244,10 +257,25 @@ export const useGameStore = create<GameStore>()(
             lobbyStatus: event.payload.view.phase === 'complete' ? 'post_game' : 'in_game'
           };
         }
-        
 
         case 'PLAYER_TIMEOUT': {
+          // The card was already applied via CARD_PLAYED — this is just a notification.
+          // We could show a toast here in the future.
           return state;
+        }
+
+        case 'BOT_SUBSTITUTED': {
+          // A player has been replaced by a bot
+          const newBotSeats = new Set(state.botSeats);
+          newBotSeats.add(event.payload.seat);
+          return { botSeats: newBotSeats };
+        }
+
+        case 'PLAYER_RETURNED': {
+          // A player has rejoined and taken back control from the bot
+          const newBotSeats = new Set(state.botSeats);
+          newBotSeats.delete(event.payload.seat);
+          return { botSeats: newBotSeats };
         }
 
         default:

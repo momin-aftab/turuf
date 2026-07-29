@@ -40,6 +40,7 @@ import { successResponse, Errors, handleAuthError } from '@/lib/response';
 import { checkRateLimit, gameActionLimiter } from '@/lib/rate-limit';
 import { validateMove, applyCardPlay, parseCardId, toPlayerView, computeGameWinner } from '@turuf/game-engine';
 import type { Seat } from '@turuf/game-engine';
+import { chainBotPlays } from '@/lib/bot-chain';
 
 export const runtime = 'nodejs';
 
@@ -172,10 +173,19 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // ── Chain bot plays if next seat(s) are inactive ──────────────────
+    let finalState = newState;
+    if (!isGameOver) {
+      const freshLobby = await getLobby(token.lobbyId);
+      if (freshLobby) {
+        finalState = await chainBotPlays(newState, freshLobby, token.lobbyId);
+      }
+    }
+
     return successResponse({
-      seq: newState.actionSequence,
+      seq: finalState.actionSequence,
       roundComplete: isRoundComplete,
-      gameOver: isGameOver,
+      gameOver: finalState.phase === 'complete',
     });
   } finally {
     await releaseGameLock(token.lobbyId);

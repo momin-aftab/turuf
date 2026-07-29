@@ -7,7 +7,7 @@ import { useGameStore } from '@/store/game';
 import { PlayerSeat } from './PlayerSeat';
 
 export function GameBoard() {
-  const { view, players, mySeat } = useGameStore();
+  const { view, players, mySeat, botSeats, turnDeadline } = useGameStore();
   const [showHighlight, setShowHighlight] = useState(false);
 
   // Effect to delay highlight by 2.5 seconds when a round completes
@@ -182,12 +182,14 @@ export function GameBoard() {
                 seat={seat}
                 team={player.team}
                 isMyTurn={!isGameOver && view.currentTurn === seat}
-                isConnected={true} // In real app, compute from players state
+                isConnected={!botSeats.has(seat)}
                 isMe={seat === mySeat}
                 isDealer={seat === 0}
                 roundsWon={roundsWon}
                 isGameOver={isGameOver}
                 winningTeam={winningTeam}
+                isBot={botSeats.has(seat)}
+                turnDeadline={view.currentTurn === seat ? turnDeadline : null}
               />
             </div>
             

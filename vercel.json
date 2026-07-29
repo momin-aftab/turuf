@@ -1,14 +1,22 @@
 {
   "functions": {
     "apps/web/app/api/game/action/route.ts": {
-      "maxDuration": 10,
+      "maxDuration": 15,
       "runtime": "nodejs20.x"
     },
     "apps/web/app/api/game/trump/route.ts": {
       "maxDuration": 10,
       "runtime": "nodejs20.x"
     },
+    "apps/web/app/api/game/timeout/route.ts": {
+      "maxDuration": 15,
+      "runtime": "nodejs20.x"
+    },
     "apps/web/app/api/lobby/*/start/route.ts": {
+      "maxDuration": 10,
+      "runtime": "nodejs20.x"
+    },
+    "apps/web/app/api/lobby/*/rejoin/route.ts": {
       "maxDuration": 10,
       "runtime": "nodejs20.x"
     }
