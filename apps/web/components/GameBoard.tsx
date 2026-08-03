@@ -5,10 +5,12 @@ import { Seat, computeRoundWinner } from '@turuf/game-engine';
 import { CardView } from './CardView';
 import { useGameStore } from '@/store/game';
 import { PlayerSeat } from './PlayerSeat';
+import { apiClient } from '@/lib/api-client';
 
 export function GameBoard() {
-  const { view, players, mySeat, botSeats, turnDeadline } = useGameStore();
+  const { view, players, mySeat, botSeats, turnDeadline, lobbyId, isAdmin } = useGameStore();
   const [showHighlight, setShowHighlight] = useState(false);
+  const [isRestarting, setIsRestarting] = useState(false);
 
   // Effect to delay highlight by 2.5 seconds when a round completes
   const isRoundComplete = view ? Object.keys(view.played).length === 4 : false;
@@ -152,13 +154,34 @@ export function GameBoard() {
           <div style={{ fontSize: '1.25rem', marginBottom: '2rem', color: winningTeam === 'B' ? 'var(--color-carpet-gold)' : '#fff' }}>
             Team B: {view.scores.B}
           </div>
-          <button 
-            className="btn btn-primary"
-            onClick={() => window.location.href = '/'}
-            style={{ width: 'auto', padding: '0.5rem 1.5rem' }}
-          >
-            Back to Lobby
-          </button>
+          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <button 
+              className="btn btn-secondary"
+              onClick={() => window.location.href = '/'}
+              style={{ width: 'auto', padding: '0.5rem 1.5rem' }}
+              disabled={isRestarting}
+            >
+              Back to Menu
+            </button>
+            {isAdmin && lobbyId && (
+              <button 
+                className="btn btn-primary"
+                onClick={async () => {
+                  if (isRestarting) return;
+                  setIsRestarting(true);
+                  try {
+                    await apiClient.lobby.restart(lobbyId);
+                  } catch (e) {
+                    setIsRestarting(false);
+                  }
+                }}
+                style={{ width: 'auto', padding: '0.5rem 1.5rem' }}
+                disabled={isRestarting}
+              >
+                {isRestarting ? 'Restarting...' : 'Play Again (Same Lobby)'}
+              </button>
+            )}
+          </div>
         </div>
       )}
 

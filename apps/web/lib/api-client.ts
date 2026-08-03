@@ -92,6 +92,9 @@ export const apiClient = {
         method: 'POST',
         body: JSON.stringify({ playerId, name }),
       }),
+
+    restart: (lobbyId: string) =>
+      fetchApi<{ status: string }>(`/api/lobby/${lobbyId}/restart`, { method: 'POST' }),
   },
   
   game: {

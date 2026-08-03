@@ -61,6 +61,7 @@ export type ServerEvent =
   | { type: 'PLAYER_TIMEOUT'; payload: { seat: Seat; name: string; cardPlayed: Card } }
   | { type: 'BOT_SUBSTITUTED'; payload: { seat: Seat; name: string } }
   | { type: 'PLAYER_RETURNED'; payload: { seat: Seat; name: string } }
+  | { type: 'LOBBY_RESET'; payload: { status: string; playerCount: number } }
   | { type: 'CHAT_MESSAGE'; payload: { seat: Seat; name: string; message: string; timestamp: number } };
 
 export interface PublicPlayerInfo {

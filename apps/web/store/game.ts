@@ -278,6 +278,17 @@ export const useGameStore = create<GameStore>()(
           return { botSeats: newBotSeats };
         }
 
+        case 'LOBBY_RESET': {
+          return {
+            lobbyStatus: event.payload.status as any,
+            view: null,
+            myHand: [],
+            turnDeadline: null,
+            botSeats: new Set(),
+            error: null,
+          };
+        }
+
         default:
           return state;
       }
